@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════════════════════
+# PROD-SIM: ingen build — imaget kommer fra CI (GHCR).
+#
+# "Deploy" i dette kurset:
+#   export IMAGE_TAG=sha-a1b2c3d        # tag fra grønn pipeline
+#   podman compose -f compose.prod.yml pull
+#   podman compose -f compose.prod.yml up -d
+#   curl --fail http://localhost:8080/health
+#
+# PowerShell: $env:IMAGE_TAG="sha-a1b2c3d" (resten er identisk)
+#
+# Pakken er PUBLICERT i GitHub (Packages → settings → Change visibility) —
+# da trenger pull ingen login. På jobben er pakken privat og du logger inn
+# med en PAT først: se leksjonen i uke 2, onsdag.
+#
+# LABAPI_IMAGE og IMAGE_TAG settes i .env (eller eksporteres i shellen).
+# Samme image som CI bygde — ingen kode bygges på din maskin.
+# ═══════════════════════════════════════════════════════════
+name: labapi-prod
+
+services:
+  db:
+    image: docker.io/library/postgres:16
+    container_name: lab-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  api:
+    # IKKE build: — imaget hentes fra GHCR. Det er hele poenget.
+    # LABAPI_IMAGE (navn uten tag) og IMAGE_TAG (tag) kommer fra .env —
+    # å endre IMAGE_TAG er hele «deployen»: pull henter, up bytter.
+    image: ${LABAPI_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: lab-api-prod
+    restart: unless-stopped
+    cpus: 0.50
+    mem_limit: 512m
+    environment:
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      APP_VERSION: ${IMAGE_TAG:-latest}
+      # Vi kjører MIGRATE_ON_STARTUP også i prod-sim — men vi gjør det
+      # ærlig. På jobben skal IKKE appen migrere selv: da kjøres migrasjoner
+      # som ett eget steg i pipelinen (én runner, én lås, ingen kappløp).
+      # Her er det én instans og ett kurs-volum: auto-migrering er trygt,
+      # og det holder «deploy»-flyten nede i to kommandoer.
+      # Flere replikaer → migrating som egen jobb + egne DB-rettigheter.
+      MIGRATE_ON_STARTUP: "true"
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Samme som i compose.yml: 127.0.0.1 (Kestrel binder kun IPv4) og
+      # GET via -O /dev/null (--spider sender HEAD -> 405 på MapGet-endepunkt).
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  app-network:
+    driver: bridge

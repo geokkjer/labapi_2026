@@ -1,0 +1,18 @@
+# Bygg-artefakter og lokale filer som aldri hører hjemme i et image.
+# Leses av docker/podman build — fasit gjennomgås i økt 2.
+bin/
+obj/
+publish/
+logs/
+.git/
+.gitignore
+.vs/
+.idea/
+*.md
+*.env
+.env
+.env.*
+Dockerfile
+docker-compose*.yml
+compose*.yml
+README.md
