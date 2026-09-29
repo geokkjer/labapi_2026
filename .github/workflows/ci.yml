@@ -11,6 +11,64 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}   # ghcr.io/<bruker>/<repo>
+  IMAGE_NAME: ${{ github.repository }} # ghcr.io/<bruker>/<repo>
+jobs:
+  format:
+    name: Kvalitetsport · dotnet format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet format LabApi.slnx --verify-no-changes
+  build:
+    name: Bygg og test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      # Kvalitetsport: rød test stopper alt under her
+      - run: dotnet test --no-build --logger "console;verbosity=normal"
+      # Kvalitetsport: kjente sårbarheter i NuGet-pakker
+      - run: dotnet list package --vulnerable --include-transitive
+  docker:
+    name: Bygg og push image til GHCR
+    runs-on: ubuntu-latest
+    # Kjør kun når alle portene er grønne
+    needs: [format, build]
+    # Ikke push på pull_request — bare på merge til main
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
 
-  
+      - name: Sett opp Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Logg inn på GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Metadata og tags (sha-<kort> + latest)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+      - name: Bygg og push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
