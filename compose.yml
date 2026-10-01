@@ -42,7 +42,7 @@ services:
       MIGRATE_ON_STARTUP: "true"
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
     ports:
-      - "8081:8080"
+      - "8080:8080"
     networks:
       - app-network
     depends_on:
