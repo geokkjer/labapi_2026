@@ -22,6 +22,12 @@ public static class DbInitializer
             new Product { Name = "External SSD 1TB", Price = 1299.00m },
             new Product { Name = "Wireless Charger", Price = 349.00m },
             new Product { Name = "Standing Desk", Price = 4999.00m },
+            new Product { Name = "Ergonomic Chair", Price = 3999.00m },
+            new Product { Name = "Smartphone", Price = 7999.00m },
+            new Product { Name = "Tablet", Price = 5999.00m },
+            new Product { Name = "Smartwatch", Price = 2999.00m },
+            new Product { Name = "Bluetooth Speaker", Price = 999.00m },
+            new Product { Name = "Gaming Console", Price = 4999.00m },
         };
 
         db.Products.AddRange(products);
